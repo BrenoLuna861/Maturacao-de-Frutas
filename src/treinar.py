@@ -24,6 +24,7 @@ from src.data.splits import carregar_splits
 from src.models.construir import congelar_backbone, construir_modelo, escolher_dispositivo
 from src.utils.config import caminho_absoluto, carregar_config, fixar_seed
 from src.utils.metricas import plotar_curvas
+from src.utils.registro import registrar
 
 
 def _uma_epoca(modelo, loader, criterio, otimizador, dispositivo, treinando):
@@ -77,6 +78,7 @@ def treinar(modelo, loaders, cfg, dispositivo, pesos_classe=None, tag="modelo"):
             continue
 
         congelar_backbone(modelo, congelar)
+        sem_melhora = 0  # cada fase tem a propria paciencia
         otimizador = torch.optim.AdamW(
             [p for p in modelo.parameters() if p.requires_grad],
             lr=lr,
@@ -108,7 +110,8 @@ def treinar(modelo, loaders, cfg, dispositivo, pesos_classe=None, tag="modelo"):
     return historico, melhor_acc, caminho_melhor
 
 
-def _validacao_cruzada(cultura, cfg, dispositivo, classes, pre_treinado=True):
+def _validacao_cruzada(cultura, cfg, dispositivo, classes, pre_treinado=True, tag=None):
+    tag = tag or cultura
     k = cfg["validacao_cruzada"]["k"]
     df = carregar_splits(cultura, cfg)
     df = df[df["split"] != "teste"].reset_index(drop=True)
@@ -136,7 +139,7 @@ def _validacao_cruzada(cultura, cfg, dispositivo, classes, pre_treinado=True):
         _, acc, _ = treinar(
             modelo, loaders, cfg, dispositivo,
             pesos_das_classes(df.iloc[idx_tr], len(classes)),
-            tag=f"{cultura}_fold{fold}",
+            tag=f"{tag}_fold{fold}",
         )
         resultados.append(acc)
 
@@ -145,12 +148,20 @@ def _validacao_cruzada(cultura, cfg, dispositivo, classes, pre_treinado=True):
     print(f"\nvalidacao cruzada ({k} folds): {media:.3f} +/- {desvio:.3f}")
     print(f"folds: {[round(r, 3) for r in resultados]}")
 
-    destino = caminho_absoluto(cfg["saida"]["models_dir"]) / f"{cultura}_cv.json"
+    destino = caminho_absoluto(cfg["saida"]["models_dir"]) / f"{tag}_cv.json"
     destino.write_text(
         json.dumps({"k": k, "acuracias": resultados, "media": media, "desvio": desvio}, indent=2),
         encoding="utf-8",
     )
     print(destino)
+
+    registrar(
+        cultura, cfg["treino"]["arquitetura"], "kfold",
+        {"acuracia": media, "recall_macro": float("nan"), "f1_macro": float("nan")},
+        len(df),
+        experimento=tag,
+        observacao=f"k={k} desvio={desvio:.4f}",
+    )
 
 
 def main():
@@ -158,6 +169,8 @@ def main():
     ap.add_argument("--cultura", required=True)
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--kfold", action="store_true")
+    ap.add_argument("--experimento", default="",
+                    help="rotulo da rodada; evita sobrescrever o modelo anterior")
     ap.add_argument("--sem-pre-treino", action="store_true",
                     help="nao baixa os pesos do ImageNet (so para teste offline)")
     args = ap.parse_args()
@@ -172,8 +185,11 @@ def main():
     if not pre_treinado:
         print("rodando sem pesos do ImageNet")
 
+    # sem rotulo, a rodada sobrescreve a anterior; com rotulo, cada uma fica guardada
+    tag = f"{args.cultura}_{args.experimento}" if args.experimento else args.cultura
+
     if args.kfold or cfg["validacao_cruzada"]["ativa"]:
-        _validacao_cruzada(args.cultura, cfg, dispositivo, classes, pre_treinado)
+        _validacao_cruzada(args.cultura, cfg, dispositivo, classes, pre_treinado, tag)
         return
 
     loaders = criar_dataloaders(args.cultura, cfg)
@@ -182,18 +198,26 @@ def main():
     modelo = modelo.to(dispositivo)
 
     inicio = time.time()
-    historico, _, _ = treinar(
+    historico, melhor_acc, _ = treinar(
         modelo, loaders, cfg, dispositivo,
         pesos_das_classes(df_treino, len(classes)),
-        tag=args.cultura,
+        tag=tag,
     )
     print(f"tempo: {(time.time() - inicio) / 60:.1f} min")
 
     fig = plotar_curvas(
         historico,
-        caminho_absoluto(cfg["saida"]["figures_dir"]) / f"curvas_{args.cultura}.png",
+        caminho_absoluto(cfg["saida"]["figures_dir"]) / f"curvas_{tag}.png",
     )
     print(fig)
+
+    registrar(
+        args.cultura, cfg["treino"]["arquitetura"], "validacao",
+        {"acuracia": melhor_acc, "recall_macro": float("nan"), "f1_macro": float("nan")},
+        len(loaders["validacao"].dataset),
+        experimento=tag,
+        observacao=f"lr_ft={cfg['treino']['lr_finetune']} bs={cfg['treino']['batch_size']}",
+    )
     print(f"\nagora: python -m src.avaliar --cultura {args.cultura}")
 
 

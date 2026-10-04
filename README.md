@@ -44,6 +44,31 @@ python -m src.baseline --cultura manga
 python -m src.treinar --cultura manga
 python -m src.treinar --cultura manga --kfold
 python -m src.avaliar --cultura manga
+python -m src.comparar --cultura manga
+```
+
+Classificar imagens novas:
+
+```bash
+python -m src.prever --cultura manga --imagem foto.jpg
+python -m src.prever --cultura manga --pasta fotos/ --csv reports/previsoes.csv
+```
+
+Para não sobrescrever a rodada anterior, nomeie o experimento:
+
+```bash
+python -m src.treinar --cultura manga --experimento lr1e4_bs32
+python -m src.avaliar --cultura manga --checkpoint models/manga_lr1e4_bs32.pt
+```
+
+Cada rodada acrescenta uma linha em `reports/experimentos.csv`, e o
+`comparar.py` monta a tabela e o gráfico baseline × CNN a partir dele.
+
+Para baixar as bases públicas (precisa de credencial do Kaggle):
+
+```bash
+python scripts/baixar_dados.py --listar
+python scripts/baixar_dados.py --base manga_srabon
 ```
 
 Para testar o pipeline sem ter as imagens:
@@ -68,6 +93,12 @@ agressivo de saturação ensina o modelo a ignorar o que importa.
 `reports/figures/erros_<cultura>.csv`. Erro confiante costuma ser rótulo errado
 na base ou atalho aprendido (fundo, cesta, iluminação).
 
+Imagem corrompida não derruba a execução: o treino, o baseline e a previsão
+avisam no terminal e seguem. Base pública costuma ter JPEG truncado.
+
+`reports/experimentos.csv` é versionado de propósito — é o registro de quais
+números saíram de qual configuração.
+
 ## Estrutura
 
 ```
@@ -79,7 +110,10 @@ src/models/construir.py  MobileNetV3
 src/baseline.py          HSV + SVM
 src/treinar.py           treino em duas fases, k-fold
 src/avaliar.py           metricas e matriz de confusao
-scripts/                 dados sinteticos para teste
+src/prever.py            inferencia em imagem ou pasta
+src/comparar.py          tabela e grafico baseline x CNN
+src/utils/registro.py    log de experimentos em CSV
+scripts/                 download das bases e dados sinteticos
 tests/                   testes
 ```
 

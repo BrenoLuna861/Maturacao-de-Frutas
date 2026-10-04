@@ -12,6 +12,7 @@ from src.data.dataset import criar_dataloaders
 from src.models.construir import construir_modelo, escolher_dispositivo
 from src.utils.config import caminho_absoluto, carregar_config, fixar_seed
 from src.utils.metricas import calcular_metricas, plotar_matriz_confusao
+from src.utils.registro import registrar
 
 
 def prever(modelo, loader, dispositivo):
@@ -34,6 +35,8 @@ def main():
     ap.add_argument("--cultura", required=True)
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--checkpoint")
+    ap.add_argument("--experimento", default="", help="rotulo para identificar a rodada")
+    ap.add_argument("--observacao", default="")
     args = ap.parse_args()
 
     cfg = carregar_config(args.config)
@@ -96,6 +99,13 @@ def main():
     destino = caminho_absoluto(cfg["saida"]["models_dir"]) / f"{args.cultura}_metricas.json"
     destino.write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\n{destino}")
+
+    csv = registrar(
+        args.cultura, cfg["treino"]["arquitetura"], "teste", m, len(y_true),
+        experimento=args.experimento or caminho_ckpt.stem,
+        observacao=args.observacao,
+    )
+    print(csv)
 
 
 if __name__ == "__main__":

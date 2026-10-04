@@ -1,6 +1,9 @@
 import pandas as pd
 import torch
-from PIL import Image
+from PIL import Image, ImageFile
+
+# base publica costuma ter jpeg truncado; sem isso o treino morre no meio
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
@@ -15,13 +18,22 @@ class DatasetFrutos(Dataset):
     def __init__(self, df, transformacao):
         self.df = df.reset_index(drop=True)
         self.transformacao = transformacao
+        self._ilegiveis = set()
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, i):
         linha = self.df.iloc[i]
-        imagem = Image.open(caminho_absoluto(linha["caminho"])).convert("RGB")
+        caminho = caminho_absoluto(linha["caminho"])
+        try:
+            imagem = Image.open(caminho).convert("RGB")
+        except OSError as e:
+            # nao derruba o treino: avisa uma vez e devolve a proxima imagem
+            if caminho not in self._ilegiveis:
+                self._ilegiveis.add(caminho)
+                print(f"[ilegivel] {caminho}: {e}")
+            return self[(i + 1) % len(self)]
         return self.transformacao(imagem), int(linha["rotulo"])
 
 

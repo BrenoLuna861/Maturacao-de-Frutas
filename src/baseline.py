@@ -5,6 +5,7 @@ Termo de comparacao para a CNN. Roda em CPU, em segundos.
     python -m src.baseline --cultura manga
 """
 import argparse
+import json
 
 import cv2
 import numpy as np
@@ -16,6 +17,7 @@ from tqdm import tqdm
 from src.data.splits import carregar_splits
 from src.utils.config import caminho_absoluto, carregar_config, fixar_seed
 from src.utils.metricas import calcular_metricas, plotar_matriz_confusao
+from src.utils.registro import registrar
 
 BINS = (16, 8, 8)
 
@@ -23,7 +25,7 @@ BINS = (16, 8, 8)
 def extrair_features(caminho):
     imagem = cv2.imread(str(caminho_absoluto(caminho)))
     if imagem is None:
-        raise ValueError(f"Nao consegui ler: {caminho}")
+        return None
 
     imagem = cv2.resize(imagem, (256, 256))
     hsv = cv2.cvtColor(imagem, cv2.COLOR_BGR2HSV)
@@ -32,8 +34,24 @@ def extrair_features(caminho):
 
 
 def montar_matriz(df, descricao):
-    X = np.array([extrair_features(c) for c in tqdm(df["caminho"], desc=descricao)])
-    return X, df["rotulo"].to_numpy()
+    X, y, ilegiveis = [], [], []
+
+    for caminho, rotulo in tqdm(
+        zip(df["caminho"], df["rotulo"]), total=len(df), desc=descricao
+    ):
+        features = extrair_features(caminho)
+        if features is None:
+            ilegiveis.append(caminho)
+            continue
+        X.append(features)
+        y.append(rotulo)
+
+    if ilegiveis:
+        print(f"  {len(ilegiveis)} imagem(ns) ilegivel(eis) ignorada(s): {ilegiveis[:3]}")
+    if not X:
+        raise ValueError(f"Nenhuma imagem legivel em '{descricao}'")
+
+    return np.array(X), np.array(y)
 
 
 def main():
@@ -70,6 +88,17 @@ def main():
         titulo=f"Baseline HSV+SVM - {args.cultura}",
     )
     print(fig)
+
+    destino = caminho_absoluto(cfg["saida"]["models_dir"]) / f"{args.cultura}_baseline_metricas.json"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(destino)
+
+    csv = registrar(
+        args.cultura, "baseline_hsv_svm", "teste", m, len(y_teste),
+        observacao=f"bins={BINS}",
+    )
+    print(csv)
 
 
 if __name__ == "__main__":
