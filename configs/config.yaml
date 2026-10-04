@@ -1,0 +1,60 @@
+# Configuracao central do projeto.
+# Tudo que muda entre experimentos fica aqui, nao espalhado no codigo.
+
+projeto:
+  nome: maturacao-frutos
+  seed: 42
+
+dados:
+  # Pasta com as imagens brutas, organizadas como:
+  #   data/raw/<cultura>/<classe>/<arquivo>.jpg
+  raw_dir: data/raw
+  processed_dir: data/processed
+  # Culturas analisadas. Rode o pipeline uma vez para cada.
+  culturas: [manga, uva]
+  # Esquema de classes unico para as duas culturas.
+  # Se a base de origem usar outros nomes, mapeie em `mapeamento_classes`.
+  classes: [verde, de_vez, maduro]
+  mapeamento_classes:
+    unripe: verde
+    green: verde
+    partially_ripe: de_vez
+    semi_ripe: de_vez
+    ripe: maduro
+    overripe: maduro
+  # Proporcoes do split. A soma precisa dar 1.0.
+  split:
+    treino: 0.70
+    validacao: 0.15
+    teste: 0.15
+  # Prefixo que identifica o mesmo fruto em fotos diferentes.
+  # Evita que fotos do mesmo fruto caiam em treino e teste ao mesmo tempo.
+  # Ex.: "manga_017_a.jpg" e "manga_017_b.jpg" -> grupo "manga_017"
+  regex_grupo: '^(.*?)(?:_[a-z0-9]+)?\.[^.]+$'
+
+treino:
+  arquitetura: mobilenet_v3_small   # ou mobilenet_v3_large
+  img_size: 224
+  batch_size: 32
+  epocas_cabeca: 5        # backbone congelado
+  epocas_finetune: 15     # backbone liberado
+  lr_cabeca: 0.001
+  lr_finetune: 0.0001
+  weight_decay: 0.0001
+  paciencia_early_stopping: 5
+  num_workers: 2
+
+validacao_cruzada:
+  ativa: false
+  k: 5
+
+aumento_dados:
+  flip_horizontal: true
+  rotacao_graus: 15
+  jitter_brilho: 0.2
+  jitter_contraste: 0.2
+  jitter_saturacao: 0.2
+
+saida:
+  models_dir: models
+  figures_dir: reports/figures

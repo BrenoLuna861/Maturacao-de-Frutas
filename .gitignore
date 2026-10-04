@@ -1,0 +1,36 @@
+# Dados e modelos (pesados — não vão para o Git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.onnx
+
+# Saídas de execução
+reports/figures/*
+!reports/figures/.gitkeep
+runs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+.coverage
+
+# IDE / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Credenciais
+kaggle.json
+.env
